@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const config = require('./config');
 const redisService = require('./services/redisService');
 const websocketService = require('./services/websocketService');
+const errorHandler = require('./middleware/errorHandler');
 
 // Import routes
 const ridesRouter = require('./routes/rides');
@@ -32,16 +33,13 @@ app.use('/api/rides', ridesRouter);
 app.use('/api/tracking', trackingRouter);
 app.use('/api/payments', paymentsRouter);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
+
+// Error handling middleware (must be last)
+app.use(errorHandler);
 
 // Initialize services and start server
 const startServer = async () => {
