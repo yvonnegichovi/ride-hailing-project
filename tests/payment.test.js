@@ -26,5 +26,21 @@ describe('PaymentService', () => {
       const fare = paymentService.calculateFare(1.333, 1);
       expect(fare).toBe(4.75);
     });
+
+    test('should throw error for negative distance', () => {
+      expect(() => paymentService.calculateFare(-5, 10)).toThrow('Distance must be a non-negative number');
+    });
+
+    test('should throw error for negative duration', () => {
+      expect(() => paymentService.calculateFare(5, -10)).toThrow('Duration must be a non-negative number');
+    });
+
+    test('should throw error for non-numeric distance', () => {
+      expect(() => paymentService.calculateFare('invalid', 10)).toThrow('Distance must be a non-negative number');
+    });
+
+    test('should throw error for non-numeric duration', () => {
+      expect(() => paymentService.calculateFare(5, 'invalid')).toThrow('Duration must be a non-negative number');
+    });
   });
 });

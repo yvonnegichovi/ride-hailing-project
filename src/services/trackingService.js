@@ -72,6 +72,9 @@ class TrackingService {
   async findNearbyDrivers(latitude, longitude, radiusKm = 5) {
     try {
       // Using Haversine formula for distance calculation
+      // Note: For production with large datasets, consider using PostGIS extension
+      // for better performance with spatial indexes. This implementation is suitable
+      // for small to medium datasets without requiring additional PostgreSQL extensions.
       const result = await db.query(
         `SELECT d.*, u.name, u.phone,
          (6371 * acos(cos(radians($1)) * cos(radians(d.current_latitude)) * 

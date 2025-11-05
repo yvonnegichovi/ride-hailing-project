@@ -178,10 +178,16 @@ class PaymentService {
   }
 
   calculateFare(distance, duration) {
-    // Simple fare calculation: base fare + distance rate + time rate
-    const baseFare = 2.50;
-    const perKmRate = 1.50;
-    const perMinuteRate = 0.25;
+    // Validate inputs
+    if (typeof distance !== 'number' || distance < 0) {
+      throw new Error('Distance must be a non-negative number');
+    }
+    if (typeof duration !== 'number' || duration < 0) {
+      throw new Error('Duration must be a non-negative number');
+    }
+
+    // Use configurable pricing from config
+    const { baseFare, perKmRate, perMinuteRate } = config.pricing;
 
     const fare = baseFare + (distance * perKmRate) + (duration * perMinuteRate);
     return Math.round(fare * 100) / 100; // Round to 2 decimal places

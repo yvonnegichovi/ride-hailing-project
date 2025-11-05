@@ -24,6 +24,11 @@ const config = {
     secretKey: process.env.STRIPE_SECRET_KEY,
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
   },
+  pricing: {
+    baseFare: parseFloat(process.env.BASE_FARE) || 2.50,
+    perKmRate: parseFloat(process.env.PER_KM_RATE) || 1.50,
+    perMinuteRate: parseFloat(process.env.PER_MINUTE_RATE) || 0.25,
+  },
 };
 
 module.exports = config;
