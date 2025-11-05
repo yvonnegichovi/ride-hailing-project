@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ride Hailing - Real-time Tracking Demo</title>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        h2 { color: #666; margin-top: 0; }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .event-log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .event-item {
+            padding: 5px;
+            margin: 2px 0;
+            border-left: 3px solid #007bff;
+            background: white;
+        }
+        .location-update { border-left-color: #28a745; }
+        .ride-event { border-left-color: #ffc107; }
+        .payment-event { border-left-color: #17a2b8; }
+    </style>
+</head>
+<body>
+    <h1>🚗 Ride Hailing - Real-time Tracking Demo</h1>
+    
+    <div class="container">
+        <h2>Connection Status</h2>
+        <div id="connectionStatus" class="status disconnected">Disconnected</div>
+        <div>
+            <label>User ID: <input type="number" id="userId" value="1"></label>
+            <label>Role: 
+                <select id="userRole">
+                    <option value="rider">Rider</option>
+                    <option value="driver">Driver</option>
+                </select>
+            </label>
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Ride Actions</h2>
+        <div>
+            <label>Ride ID: <input type="number" id="rideId" value="1"></label>
+            <button onclick="joinRide()">Join Ride</button>
+            <button onclick="leaveRide()">Leave Ride</button>
+        </div>
+        <div style="margin-top: 10px;">
+            <button onclick="requestRide()">Request New Ride</button>
+            <button onclick="simulateLocationUpdate()">Simulate Location Update</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Real-time Events</h2>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="eventLog" class="event-log"></div>
+    </div>
+
+    <script>
+        let socket = null;
+
+        function connect() {
+            const userId = document.getElementById('userId').value;
+            const userRole = document.getElementById('userRole').value;
+
+            socket = io('http://localhost:3000');
+
+            socket.on('connect', () => {
+                updateConnectionStatus(true);
+                logEvent('system', 'Connected to server');
+                
+                // Register user
+                socket.emit('register', { userId: parseInt(userId), userRole });
+                logEvent('system', `Registered as ${userRole} (ID: ${userId})`);
+            });
+
+            socket.on('disconnect', () => {
+                updateConnectionStatus(false);
+                logEvent('system', 'Disconnected from server');
+            });
+
+            // Location updates
+            socket.on('location-update', (data) => {
+                logEvent('location-update', `Driver ${data.driverId} location: ${data.latitude}, ${data.longitude}`);
+            });
+
+            // Ride events
+            socket.on('ride-requested', (data) => {
+                logEvent('ride-event', `New ride requested: Ride #${data.rideId}`);
+            });
+
+            socket.on('ride-accepted', (data) => {
+                logEvent('ride-event', `Ride #${data.rideId} accepted by driver ${data.driverId}`);
+            });
+
+            socket.on('ride-started', (data) => {
+                logEvent('ride-event', `Ride #${data.rideId} started`);
+            });
+
+            socket.on('ride-completed', (data) => {
+                logEvent('ride-event', `Ride #${data.rideId} completed. Fare: $${data.fare}`);
+            });
+
+            socket.on('ride-cancelled', (data) => {
+                logEvent('ride-event', `Ride #${data.rideId} cancelled`);
+            });
+
+            // Payment events
+            socket.on('payment-created', (data) => {
+                logEvent('payment-event', `Payment created for ride #${data.rideId}: $${data.amount}`);
+            });
+
+            socket.on('payment-confirmed', (data) => {
+                logEvent('payment-event', `Payment confirmed for ride #${data.rideId}: ${data.status}`);
+            });
+
+            socket.on('payment-refunded', (data) => {
+                logEvent('payment-event', `Payment refunded for ride #${data.rideId}: $${data.amount}`);
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusDiv = document.getElementById('connectionStatus');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            
+            if (connected) {
+                statusDiv.className = 'status connected';
+                statusDiv.textContent = 'Connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else {
+                statusDiv.className = 'status disconnected';
+                statusDiv.textContent = 'Disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+
+        function joinRide() {
+            if (!socket) {
+                alert('Please connect first');
+                return;
+            }
+            const rideId = document.getElementById('rideId').value;
+            socket.emit('join-ride', parseInt(rideId));
+            logEvent('system', `Joined ride #${rideId}`);
+        }
+
+        function leaveRide() {
+            if (!socket) {
+                alert('Please connect first');
+                return;
+            }
+            const rideId = document.getElementById('rideId').value;
+            socket.emit('leave-ride', parseInt(rideId));
+            logEvent('system', `Left ride #${rideId}`);
+        }
+
+        function requestRide() {
+            fetch('http://localhost:3000/api/rides', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    riderId: parseInt(document.getElementById('userId').value),
+                    pickupLat: 40.7128,
+                    pickupLng: -74.0060,
+                    dropoffLat: 40.7589,
+                    dropoffLng: -73.9851,
+                    pickupAddress: 'New York, NY',
+                    dropoffAddress: 'Times Square, NY'
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                logEvent('system', `Ride created: #${data.id}`);
+                document.getElementById('rideId').value = data.id;
+            })
+            .catch(err => logEvent('system', `Error: ${err.message}`));
+        }
+
+        function simulateLocationUpdate() {
+            const lat = 40.7128 + (Math.random() - 0.5) * 0.01;
+            const lng = -74.0060 + (Math.random() - 0.5) * 0.01;
+            const rideId = document.getElementById('rideId').value;
+
+            fetch('http://localhost:3000/api/tracking/location', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    driverId: 1,
+                    latitude: lat,
+                    longitude: lng,
+                    rideId: parseInt(rideId)
+                })
+            })
+            .then(res => res.json())
+            .then(data => logEvent('system', `Location updated: ${lat.toFixed(4)}, ${lng.toFixed(4)}`))
+            .catch(err => logEvent('system', `Error: ${err.message}`));
+        }
+
+        function logEvent(type, message) {
+            const eventLog = document.getElementById('eventLog');
+            const eventItem = document.createElement('div');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            eventItem.className = `event-item ${type}`;
+            eventItem.textContent = `[${timestamp}] ${message}`;
+            
+            eventLog.insertBefore(eventItem, eventLog.firstChild);
+            
+            // Keep only last 50 events
+            while (eventLog.children.length > 50) {
+                eventLog.removeChild(eventLog.lastChild);
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('eventLog').innerHTML = '';
+        }
+
+        // Auto-connect on page load (optional)
+        // window.onload = connect;
+    </script>
+</body>
+</html>
